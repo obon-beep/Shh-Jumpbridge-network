@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <base target="_top">
+    <title>EVE Online - Silent Federation Tactical Map</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
+    <script type="text/javascript" src="https://unpkg.com/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
+    <script type="text/javascript" src="NetworkData.js"></script>
+    <script type="text/javascript" src="RouteEngine.js"></script>
+
+    <style>
+        @font-face {
+            font-family: 'MyCustomFont';
+            src: url('https://cdn.jsdelivr.net/gh/obon-beep/eve-jumpbridge/Shentox.ttf') format('truetype');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; 
+            font-family: 'MyCustomFont', Arial, sans-serif;
+        }
+
+        #mynetwork {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #f0f0f0;
+            z-index: 0;
+        }
+
+        #controlPanel {
+            position: fixed;
+            top: 10px;
+            right: -310px;
+            width: 300px;
+            max-height: 95vh;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(5px);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            box-sizing: border-box;
+            z-index: 10;
+            overflow-y: auto; 
+            transition: right 0.3s ease-in-out; 
+        }
+
+        #controlPanel.panel-open { right: 10px; }
+
+        #routeSidebar {
+            position: fixed;
+            left: -310px;
+            top: 10px;
+            width: 300px;
+            max-height: 95vh;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(5px);
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            box-sizing: border-box;
+            z-index: 10;
+            overflow-y: auto;
+            transition: left 0.3s ease-in-out;
+        }
+
+        #routeSidebar.sidebar-open { left: 10px; }
+
+        .sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #9370DB;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #663399;
+        }
+
+        .sidebar-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #666;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+        }
+
+        .sidebar-close:hover {
+            color: #FF0000;
+        }
+
+        .route-summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 3px 10px rgba(102, 126, 234, 0.3);
+            text-align: center;
+        }
+
+        .route-summary-title {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .route-summary-jumps {
+            font-size: 36px;
+            font-weight: bold;
+            margin: 8px 0;
+        }
+
+        .route-summary-systems {
+            font-size: 11px;
+            opacity: 0.9;
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .route-summary-label {
+            font-size: 9px;
+            text-transform: uppercase;
+            opacity: 0.7;
+            margin-bottom: 3px;
+        }
+
+        .route-summary-value {
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .route-systems-container {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .route-system-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 10px;
+            margin: 6px 0;
+            background: white;
+            border-radius: 6px;
+            border-left: 3px solid #9370DB;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .route-system-item:hover {
+            transform: translateX(3px);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+        }
+
+        .route-system-item.start-system {
+            border-left-color: #00CC00;
+            background: linear-gradient(90deg, #CCFFCC 0%, white 15%);
+        }
+
+        .route-system-item.end-system {
+            border-left-color: #CC0000;
+            background: linear-gradient(90deg, #FFCCCC 0%, white 15%);
+        }
+
+        .route-system-item.jumpbridge-system {
+            border-left-color: #A41CE8;
+            background: linear-gradient(90deg, #F3E5FF 0%, white 15%);
+        }
+
+        .route-system-number {
+            font-size: 14px;
+            font-weight: bold;
+            color: #9370DB;
+            min-width: 25px;
+            text-align: center;
+        }
+
+        .route-system-icon {
+            font-size: 36px;
+            margin: 0 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .route-system-icon img {
+            width: 36px;
+            height: 36px;
+            object-fit: contain;
+        }
+
+        .route-system-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #333;
+            flex-grow: 1;
+        }
+
+        .route-system-arrow {
+            font-size: 16px;
+            color: #4169E1;
+            margin: 3px 0 3px 35px;
+            opacity: 1;
+        }
+
+        .route-system-arrow.jumpbridge-arrow {
+            color: #A41CE8;
+            font-weight: bold;
+            font-size: 18px;
+            opacity: 1;
+        }
+
+        .no-route-message {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+        }
+
+        .no-route-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.3;
+        }
+
+        .no-route-text {
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        #menuToggle {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 50px;
+            height: 50px;
+            background-color: transparent; 
+            border: none;
+            cursor: pointer;
+            z-index: 20; 
+            display: flex; 
+            justify-content: center; 
+            align-items: center;     
+            padding: 0; 
+        }
+
+        #menuToggle img {
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
+        }
+
+        .panel-section { margin-bottom: 20px; padding: 10px; border: 1px solid #eee; border-radius: 8px; }
+        .input-row { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+        h3 { margin: 0 0 10px 0; color: #663399; font-size: 16px; border-bottom: 2px solid #9370DB; padding-bottom: 5px; }
+        .search-input { padding: 10px 15px; border: 2px solid #9370DB; border-radius: 20px; font-size: 14px; width: 100%; outline: none; text-transform: uppercase; box-sizing: border-box; }
+        .button { padding: 10px 20px; background-color: #9370DB; color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; font-weight: bold; transition: background-color 0.2s; width: 100%; box-sizing: border-box; }
+        .button-secondary { background-color: #ddd; color: #333; }
+        .search-result { display: block; margin-top: 10px; padding: 5px 10px; font-size: 13px; border-radius: 4px; background-color: #f9f9f9; }
+
+        @media (max-width: 768px) {
+            #controlPanel { width: calc(100% - 20px); max-height: 80vh; }
+            #routeSidebar { width: calc(100% - 20px); max-height: 80vh; left: -100%; }
+            #routeSidebar.sidebar-open { left: 10px; }
+            #menuToggle { width: 40px; height: 40px; }
+        }
+    </style>
+</head>
+<body>
+    
+    <div id="mynetwork"></div>
+
+    <div id="routeSidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-title">Route Navigator</div>
+            <button class="sidebar-close" onclick="closeSidebar()">×</button>
+        </div>
+        
+        <div id="sidebarContent">
+            <div class="no-route-message">
+                <div class="no-route-icon">🗺️</div>
+                <div class="no-route-text">
+                    Use the route finder to calculate your path between systems
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button id="menuToggle" aria-label="Toggle Controls">
+        <img src="https://raw.githubusercontent.com/obon-beep/eve-jumpbridge/main/shh-logo-1.png" alt="SHH Logo">
+    </button>
+    
+    <div id="controlPanel"> 
+        <h3>System Search</h3>
+
+        <div class="panel-section">
+            <div class="input-row">
+                <input type="text" id="focusInput" class="search-input" placeholder="System (e.g., VFK, FIC, E-FIC0)" />
+                <button id="focusButton" class="button">Go to System</button>
+            </div>
+            <span id="focusResult" class="search-result"></span>
+        </div>
+        
+        <h3>Route Finder</h3>
+        <div class="panel-section">
+            <div class="input-row">
+                <input type="text" id="fromInput" class="search-input" placeholder="From (e.g., L-C307 or C307)" />
+                <input type="text" id="toInput" class="search-input" placeholder="To (e.g., YZ-UKA or UKA)" />
+                <button id="findRouteButton" class="button">Find Route</button>
+                <button id="clearButton" class="button button-secondary">Clear All</button>
+            </div>
+            <span id="searchResult" class="search-result"></span>
+        </div>
+
+        <h3>View Controls</h3>
+        <div class="panel-section">
+            <button id="fitButton" class="button">Zoom to Fit Map</button>
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee;">
+                <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
+                    <input type="checkbox" id="toggleJumpbridges" checked style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;">
+                    <span style="font-size: 14px;">Alliance ANSI Gates <span style="color: #00FF00;">(Green)</span></span>
+                </label>
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="checkbox" id="toggleAnsiGates" checked style="margin-right: 10px; width: 18px; height: 18px; cursor: pointer;">
+                    <span style="font-size: 14px;">Friendly ANSI Gates <span style="color: #FF0000;">(Red)</span></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        let network = null;
+        const nodesData = new vis.DataSet();
+        const edgesData = new vis.DataSet();
+        let originalData = { nodes: [], connections: [] };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const toggleButton = document.getElementById('menuToggle');
+            const controlPanel = document.getElementById('controlPanel');
+            
+            // Toggle control panel
+            toggleButton.addEventListener('click', () => {
+                controlPanel.classList.toggle('panel-open');
+            });
+            
+            const fitButton = document.getElementById('fitButton'); 
+            const focusButton = document.getElementById('focusButton'); 
+            const focusInput = document.getElementById('focusInput');
+            const fromInput = document.getElementById('fromInput');
+            const toInput = document.getElementById('toInput');
+            const findRouteButton = document.getElementById('findRouteButton');
+            const clearButton = document.getElementById('clearButton');
+
+            focusButton.addEventListener('click', () => { focusOnNode(focusInput.value); });
+            focusInput.addEventListener('keypress', e => { if(e.key === 'Enter') focusOnNode(focusInput.value); });
+
+            findRouteButton.addEventListener('click', () => { findRoute(fromInput.value, toInput.value); });
+            fromInput.addEventListener('keypress', e => { if(e.key==='Enter' && toInput.value) findRoute(fromInput.value, toInput.value); });
+            toInput.addEventListener('keypress', e => { if(e.key==='Enter' && fromInput.value) findRoute(fromInput.value, toInput.value); });
+
+            clearButton.addEventListener('click', clearRoute);
+
+            if(fitButton) fitButton.addEventListener('click', () => { if(network) network.fit({animation:true}); });
+            
+            // Toggle visibility for jumpbridges
+            const toggleJumpbridges = document.getElementById('toggleJumpbridges');
+            if(toggleJumpbridges) {
+                toggleJumpbridges.addEventListener('change', () => {
+                    toggleEdgeType('jb', toggleJumpbridges.checked);
+                });
+            }
+            
+            // Toggle visibility for ANSI gates
+            const toggleAnsiGates = document.getElementById('toggleAnsiGates');
+            if(toggleAnsiGates) {
+                toggleAnsiGates.addEventListener('change', () => {
+                    toggleEdgeType('ansi', toggleAnsiGates.checked);
+                });
+            }
+
+            // Load network data directly from NetworkData.js file
+            console.log('Loading network data from NETWORK_DATA...');
+            if (typeof NETWORK_DATA !== 'undefined') {
+                console.log('✅ Network data loaded successfully');
+                drawNetwork(NETWORK_DATA);
+            } else {
+                console.error('❌ ERROR: NETWORK_DATA not found');
+                alert('Failed to load network data. Make sure NetworkData.js is loaded.');
+            }
+        });
+
+        function closeSidebar() {
+            document.getElementById('routeSidebar').classList.remove('sidebar-open');
+        }
+
+        function drawNetwork(data) {
+            // DEBUG: Log the data being received
+            console.log('drawNetwork called with data:', data);
+            console.log('Number of nodes:', data.nodes ? data.nodes.length : 0);
+            console.log('Number of connections:', data.connections ? data.connections.length : 0);
+            console.log('First 3 nodes:', data.nodes ? data.nodes.slice(0, 3) : 'No nodes');
+            
+            originalData = data;
+
+            nodesData.clear();
+            nodesData.add(data.nodes.map(n => ({
+                id: n.id,
+                label: n.label || n.id,
+                x: n.x,
+                y: n.y,
+                fixed: true,
+                shape: n.shape || 'ellipse',
+                size: n.size || (n.shape === 'box' ? 30 : 25),
+                color: { 
+                    border: '#2B7CE9', 
+                    background: n.color || '#D2E5FF' 
+                },
+                borderWidth: 2,
+                font: { color: '#000000', size: 12, face:'MyCustomFont' },
+                zIndex: 1
+            })));
+            
+            console.log('Nodes added to vis.js:', nodesData.length);
+
+            edgesData.clear();
+            
+            // Add regular connections (stargates)
+            const regularEdges = data.connections.map((c, i) => ({
+                id: 'conn'+i,
+                from: c.from,
+                to: c.to,
+                smooth: { enabled:true, type:'continuous' },
+                dashes: false,
+                color: { color: '#0056B3' },
+                width: 1,
+                type: 'Stargate',
+                zIndex: 0
+            }));
+            
+            // Add Alliance ANSI gates (green dashed)
+            const jumpbridgeEdges = (data.jumpbridges || []).map((jb, i) => ({
+                id: 'jb'+i,
+                from: jb.from,
+                to: jb.to,
+                smooth: { enabled:true, type:'continuous' },
+                dashes: true,
+                color: { color: '#00FF00' },
+                width: 3,
+                type: 'Jumpbridge',
+                zIndex: 1
+            }));
+            
+            // Add red ANSI gates (Friendly ANSI gates - red dashed)
+            const ansiGateEdges = (data.ansigates || []).map((ag, i) => ({
+                id: 'ansi'+i,
+                from: ag.from,
+                to: ag.to,
+                smooth: { enabled:true, type:'continuous' },
+                dashes: true,
+                color: { color: '#FF0000' },
+                width: 3,
+                type: 'ANSI Gate',
+                zIndex: 1
+            }));
+            
+            // Combine all types of edges
+            edgesData.add([...regularEdges, ...jumpbridgeEdges, ...ansiGateEdges]);
+            
+            console.log('Edges added to vis.js:', edgesData.length);
+
+            const container = document.getElementById('mynetwork');
+            if (!container) {
+                console.error('ERROR: Container #mynetwork not found!');
+                alert('ERROR: Network container not found!');
+                return;
+            }
+            
+            console.log('Container found:', container);
+            console.log('Container dimensions:', container.offsetWidth, 'x', container.offsetHeight);
+            
+            try {
+                console.log('Creating vis.Network...');
+                network = new vis.Network(container, { nodes: nodesData, edges: edgesData }, {
+                    layout:{improvedLayout:false},
+                    physics:{enabled:false},
+                    interaction:{hover:true, zoomView:true, dragView:true},
+                    nodes:{borderWidth:2, size:25, font:{size:12, face:'MyCustomFont'}}
+                });
+
+                console.log('Network created successfully!');
+                console.log('Calling fit()...');
+                network.fit();
+                
+                // Grid overlay removed
+                
+                console.log('drawNetwork completed successfully');
+            } catch(error) {
+                console.error('ERROR creating network:', error);
+                alert('ERROR: ' + error.message);
+            }
+        }
+
+
+        function toggleEdgeType(prefix, show) {
+            // Get all edges with the specified prefix
+            const allEdges = edgesData.get();
+            const edgesToUpdate = allEdges.filter(edge => edge.id.startsWith(prefix));
+            
+            edgesToUpdate.forEach(edge => {
+                edgesData.update({
+                    id: edge.id,
+                    hidden: !show
+                });
+            });
+        }
+
+
+        
+
+
+        function findSystemByName(inputName) {
+            if (!inputName) return null;
+            
+            inputName = inputName.trim().toUpperCase();
+            
+            let node = originalData.nodes.find(n => n.id.toUpperCase() === inputName);
+            if (node) return node;
+            
+            node = originalData.nodes.find(n => n.id.toUpperCase().includes(inputName));
+            if (node) return node;
+            
+            const inputNoDash = inputName.replace(/-/g, '');
+            node = originalData.nodes.find(n => n.id.toUpperCase().replace(/-/g, '').includes(inputNoDash));
+            if (node) return node;
+            
+            node = originalData.nodes.find(n => {
+                const parts = n.id.toUpperCase().split('-');
+                return parts.some(part => part.includes(inputName));
+            });
+            
+            return node || null;
+        }
+
+        function clearRoute() {
+            // Restore all nodes to original styling
+            nodesData.forEach(node => {
+                const originalNode = originalData.nodes.find(n => n.id === node.id);
+                nodesData.update({
+                    id: node.id, 
+                    color: {
+                        border: '#2B7CE9', 
+                        background: originalNode?.color || '#D2E5FF'
+                    }, 
+                    borderWidth: 2,
+                    fixed: true  // Ensure nodes remain fixed
+                });
+            });
+            
+            edgesData.forEach(edge => {
+                // Check all connection types to restore original styling
+                let originalColor = '#0056B3';  // Default blue for stargates
+                let originalWidth = 1;
+                let originalDashes = false;
+                
+                // Check regular connections
+                const regularConn = originalData.connections.find(c => 
+                    (c.from === edge.from && c.to === edge.to) || 
+                    (c.to === edge.from && c.from === edge.to)
+                );
+                
+                // Check jumpbridges (Alliance ANSI gates - green dashed)
+                const jumpbridge = originalData.jumpbridges?.find(c => 
+                    (c.from === edge.from && c.to === edge.to) || 
+                    (c.to === edge.from && c.from === edge.to)
+                );
+                
+                // Check ANSI gates (Friendly ANSI gates - red dashed)
+                const ansigate = originalData.ansigates?.find(c => 
+                    (c.from === edge.from && c.to === edge.to) || 
+                    (c.to === edge.from && c.from === edge.to)
+                );
+                
+                if (ansigate) {
+                    originalColor = '#FF0000';  // Red for Friendly ANSI gates
+                    originalWidth = 3;
+                    originalDashes = true;
+                } else if (jumpbridge) {
+                    originalColor = '#00FF00';  // Green for Alliance ANSI gates
+                    originalWidth = 3;
+                    originalDashes = true;
+                } else if (regularConn) {
+                    originalColor = regularConn.color || '#0056B3';
+                    originalWidth = regularConn.width || 1;
+                    originalDashes = regularConn.dashes || false;
+                }
+                
+                edgesData.update({
+                    id: edge.id, 
+                    color: {color: originalColor}, 
+                    width: originalWidth,
+                    dashes: originalDashes,
+                    zIndex: 0
+                });
+            });
+            
+            document.getElementById('searchResult').textContent='';
+            document.getElementById('focusResult').textContent='';
+            document.getElementById('fromInput').value='';
+            document.getElementById('toInput').value='';
+            
+            closeSidebar();
+        }
+
+        function focusOnNode(inputName) {
+            if(!network) return;
+            
+            const node = findSystemByName(inputName);
+            
+            if(node) {
+                nodesData.update({
+                    id: node.id,
+                    color: {border:'#FFD700', background:'#FFF8DC'},
+                    borderWidth: 4,
+                    fixed: true  // Ensure node remains fixed
+                });
+                
+                setTimeout(() => {
+                    network.focus(node.id, {
+                        scale: 2.0,
+                        offset: {x: 0, y: 0},
+                        animation: {
+                            duration: 1000,
+                            easingFunction: 'easeInOutQuad'
+                        }
+                    });
+                }, 100);
+                
+                document.getElementById('focusResult').textContent = `✓ Focused on ${node.id}`;
+            } else {
+                document.getElementById('focusResult').textContent = `✗ System "${inputName}" not found`;
+            }
+        }
+
+        function findRoute(fromInput, toInput) {
+            if(!fromInput || !toInput) {
+                document.getElementById('searchResult').textContent = 'Please enter both start and end systems';
+                return;
+            }
+            
+            const fromNode = findSystemByName(fromInput);
+            const toNode = findSystemByName(toInput);
+            
+            if (!fromNode) {
+                document.getElementById('searchResult').textContent = `✗ Start system "${fromInput}" not found`;
+                return;
+            }
+            
+            if (!toNode) {
+                document.getElementById('searchResult').textContent = `✗ End system "${toInput}" not found`;
+                return;
+            }
+            
+            document.getElementById('searchResult').textContent = 'Calculating route...';
+            
+            // Get checkbox states
+            const includeJumpbridges = document.getElementById('toggleJumpbridges').checked;
+            const includeAnsiGates = document.getElementById('toggleAnsiGates').checked;
+            
+            // Calculate route directly in browser using RouteEngine.js functions
+            try {
+                const data = NETWORK_DATA;
+                
+                // Build graph with selected connection types
+                const jumpbridges = includeJumpbridges ? (data.jumpbridges || []) : [];
+                const ansigates = includeAnsiGates ? (data.ansigates || []) : [];
+                const graph = buildGraph(data.connections, jumpbridges, ansigates);
+                
+                // Find route using Dijkstra's algorithm
+                const route = dijkstra(graph, fromNode.id.toUpperCase(), toNode.id.toUpperCase());
+                
+                // Convert route back to original case
+                if (route && route.length > 0) {
+                    const originalCaseRoute = route.map(systemUpper => {
+                        const node = data.nodes.find(n => n.id.toUpperCase() === systemUpper);
+                        return node ? node.id : systemUpper;
+                    });
+                    displayRoute(originalCaseRoute);
+                } else {
+                    displayRoute([]);
+                }
+            } catch (err) {
+                document.getElementById('searchResult').textContent = '✗ Error finding route';
+                console.error('Route calculation error:', err);
+            }
+        }
+
+        function displayRoute(route) {
+            if (!route || route.length === 0) {
+                document.getElementById('searchResult').textContent = '✗ No route found';
+                return;
+            }
+            
+            // Reset all nodes to default styling first
+            nodesData.forEach(node => {
+                const originalNode = originalData.nodes.find(n => n.id === node.id);
+                nodesData.update({
+                    id: node.id, 
+                    color: {
+                        border: '#2B7CE9', 
+                        background: originalNode?.color || '#D2E5FF'
+                    }, 
+                    borderWidth: 2,
+                    fixed: true  // Ensure nodes remain fixed
+                });
+            });
+            
+            edgesData.forEach(edge => {
+                // Check all connection types to restore original styling
+                let originalColor = '#0056B3';  // Default blue for stargates
+                let originalWidth = 1;
+                let originalDashes = false;
+                
+                // Check regular connections
+                const regularConn = originalData.connections.find(c => 
+                    (c.from === edge.from && c.to === edge.to) || 
+                    (c.to === edge.from && c.from === edge.to)
+                );
+                
+                // Check jumpbridges (Alliance ANSI gates - green dashed)
+                const jumpbridge = originalData.jumpbridges?.find(c => 
+                    (c.from === edge.from && c.to === edge.to) || 
+                    (c.to === edge.from && c.from === edge.to)
+                );
+                
+                // Check ANSI gates (Friendly ANSI gates - red dashed)
+                const ansigate = originalData.ansigates?.find(c => 
+                    (c.from === edge.from && c.to === edge.to) || 
+                    (c.to === edge.from && c.from === edge.to)
+                );
+                
+                if (ansigate) {
+                    originalColor = '#FF0000';  // Red for Friendly ANSI gates
+                    originalWidth = 3;
+                    originalDashes = true;
+                } else if (jumpbridge) {
+                    originalColor = '#00FF00';  // Green for Alliance ANSI gates
+                    originalWidth = 3;
+                    originalDashes = true;
+                } else if (regularConn) {
+                    originalColor = regularConn.color || '#0056B3';
+                    originalWidth = regularConn.width || 1;
+                    originalDashes = regularConn.dashes || false;
+                }
+                
+                edgesData.update({
+                    id: edge.id, 
+                    color: {color: originalColor}, 
+                    width: originalWidth,
+                    dashes: originalDashes,
+                    zIndex: 0
+                });
+            });
+            
+            route.forEach((systemId, index) => {
+                const node = originalData.nodes.find(n => n.id === systemId);
+                if(node) {
+                    let color;
+                    if(index === 0) {
+                        color = {border:'#00CC00', background:'#CCFFCC'};
+                    } else if(index === route.length - 1) {
+                        color = {border:'#CC0000', background:'#FFCCCC'};
+                    } else {
+                        color = {border:'#FFD700', background:'#FFFFCC'};
+                    }
+                    
+                    nodesData.update({
+                        id: systemId,
+                        color: color,
+                        borderWidth: 4,
+                        fixed: true  // Ensure nodes remain fixed
+                    });
+                }
+            });
+            
+            for(let i = 0; i < route.length - 1; i++) {
+                const fromNode = route[i];
+                const toNode = route[i + 1];
+                
+                const edge = edgesData.get().find(e => 
+                    (e.from === fromNode && e.to === toNode) || 
+                    (e.to === fromNode && e.from === toNode)
+                );
+                
+                if(edge) {
+                    edgesData.update({
+                        id: edge.id,
+                        color: {color: '#FF00FF'},
+                        width: 4,
+                        zIndex: 10
+                    });
+                }
+            }
+            
+            const jumps = route.length - 1;
+            document.getElementById('searchResult').textContent = 
+                `✓ Route found: ${jumps} jump${jumps !== 1 ? 's' : ''}`;
+            
+            updateRouteSidebar(route);
+            
+            setTimeout(() => {
+                network.fit({
+                    nodes: route,
+                    animation: {
+                        duration: 1000,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+            }, 200);
+        }
+
+        function getConnectionType(fromSystem, toSystem) {
+            // Check ANSI gates first
+            if (originalData.ansigates) {
+                const ansiGate = originalData.ansigates.find(c => 
+                    (c.from === fromSystem && c.to === toSystem) || 
+                    (c.to === fromSystem && c.from === toSystem)
+                );
+                if (ansiGate) {
+                    return 'ansigate';
+                }
+            }
+            
+            // Check jumpbridges
+            if (originalData.jumpbridges) {
+                const jumpbridge = originalData.jumpbridges.find(c => 
+                    (c.from === fromSystem && c.to === toSystem) || 
+                    (c.to === fromSystem && c.from === toSystem)
+                );
+                if (jumpbridge) {
+                    return 'jumpbridge';
+                }
+            }
+            
+            // Check regular connections
+            const connection = originalData.connections.find(c => 
+                (c.from === fromSystem && c.to === toSystem) || 
+                (c.to === fromSystem && c.from === toSystem)
+            );
+            
+            // Check if connection has type property
+            if (connection && connection.type === 'jumpbridge') {
+                return 'jumpbridge';
+            }
+            
+            // Fall back to checking dashes
+            if (connection && connection.dashes === true) {
+                return 'jumpbridge';
+            }
+            
+            return 'stargate';
+        }
+
+        function updateRouteSidebar(route) {
+            const jumps = route.length - 1;
+            const startSystem = route[0];
+            const endSystem = route[route.length - 1];
+            
+            let html = `
+                <div class="route-summary">
+                    <div class="route-summary-title">Total Distance</div>
+                    <div class="route-summary-jumps">${jumps}</div>
+                    <div style="font-size: 14px; margin-bottom: 8px;">Jump${jumps !== 1 ? 's' : ''}</div>
+                    <div class="route-summary-systems">
+                        <div>
+                            <div class="route-summary-label">From</div>
+                            <div class="route-summary-value">${startSystem}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="route-summary-label">To</div>
+                            <div class="route-summary-value">${endSystem}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="route-systems-container">
+            `;
+            
+            route.forEach((sys, idx) => {
+                let icon, cssClass;
+                
+                if(idx === 0) {
+                    icon = '<img src="https://raw.githubusercontent.com/obon-beep/eve-jumpbridge/main/Corporation%20Outpost%202.png" alt="Start">';
+                    cssClass = 'start-system';
+                } else if(idx === route.length - 1) {
+                    icon = '<img src="https://raw.githubusercontent.com/obon-beep/eve-jumpbridge/main/Capsuleer%20Outpost.png" alt="Destination">';
+                    cssClass = 'end-system';
+                } else {
+                    icon = '<img src="https://raw.githubusercontent.com/obon-beep/eve-jumpbridge/main/amarr_stargate_border.jpg" alt="Waypoint">';
+                    cssClass = '';
+                }
+                
+                html += `
+                    <div class="route-system-item ${cssClass}">
+                        <div class="route-system-number">${idx + 1}</div>
+                        <div class="route-system-icon">${icon}</div>
+                        <div class="route-system-name">${sys}</div>
+                    </div>
+                `;
+                
+                if(idx < route.length - 1) {
+                    const connectionType = getConnectionType(sys, route[idx + 1]);
+                    
+                    if (connectionType === 'jumpbridge') {
+                        html += `
+                            <div style="display: flex; align-items: center; margin: 3px 0 3px 35px;">
+                                <img src="https://raw.githubusercontent.com/obon-beep/eve-jumpbridge/main/Ansiblex%20Stargate.png" 
+                                     alt="Jumpbridge" 
+                                     style="width: 64px; height: 64px; margin-right: 10px;">
+                                <span class="route-system-arrow jumpbridge-arrow">Ansiblex Jump Gate</span>
+                            </div>
+                        `;
+                    } else if (connectionType === 'ansigate') {
+                        html += `
+                            <div style="display: flex; align-items: center; margin: 3px 0 3px 35px;">
+                                <img src="https://raw.githubusercontent.com/obon-beep/eve-jumpbridge/main/Ansiblex%20Stargate.png" 
+                                     alt="ANSI Gate" 
+                                     style="width: 64px; height: 64px; margin-right: 10px;">
+                                <span class="route-system-arrow ansigate-arrow" style="color: #FF0000; font-weight: bold;">Ansiblex Jump Gate</span>
+                            </div>
+                        `;
+                    } else {
+                        html += `<div class="route-system-arrow">↓</div>`;
+                    }
+                }
+            });
+            
+            html += `</div>`;
+            
+            document.getElementById('sidebarContent').innerHTML = html;
+            document.getElementById('routeSidebar').classList.add('sidebar-open');
+        }
+    </script>
+</body>
+</html>
