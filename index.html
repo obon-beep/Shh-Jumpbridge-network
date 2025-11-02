@@ -2,7 +2,7 @@
 <html>
 <head>
     <base target="_top">
-    <title>Silent Federation Jumpbridge Network</title>
+    <title>EVE Online - Silent Federation Tactical Map</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
     <script type="text/javascript" src="https://unpkg.com/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
     <script type="text/javascript" src="NetworkData.js"></script>
@@ -280,20 +280,22 @@
 
         @media (max-width: 768px) {
             #controlPanel { 
-                width: calc(100% - 20px); 
-                max-height: 80vh; 
-                right: -100%; /* Ensure fully hidden on mobile */
+                width: 80%; /* Take only 80% of screen, leave map visible */
+                max-width: 350px;
+                max-height: 85vh; 
+                right: -85%; /* Fully hidden off-screen */
             }
             #controlPanel.panel-open { 
-                right: 10px; 
+                right: 5px; 
             }
             #routeSidebar { 
-                width: calc(100% - 20px); 
-                max-height: 80vh; 
-                left: -100%; /* Ensure fully hidden on mobile */
+                width: 80%; /* Take only 80% of screen, leave map visible */
+                max-width: 350px;
+                max-height: 85vh; 
+                left: -85%; /* Fully hidden off-screen */
             }
             #routeSidebar.sidebar-open { 
-                left: 10px; 
+                left: 5px; 
             }
             #menuToggle { 
                 width: 40px; 
@@ -303,19 +305,21 @@
 
         @media (max-width: 480px) {
             #controlPanel { 
-                width: calc(100% - 10px); 
+                width: 85%; /* Slightly wider on small phones */
+                max-width: 320px;
                 max-height: 90vh; 
                 top: 5px;
-                right: -100%;
+                right: -90%;
             }
             #controlPanel.panel-open { 
                 right: 5px; 
             }
             #routeSidebar { 
-                width: calc(100% - 10px); 
+                width: 85%; /* Slightly wider on small phones */
+                max-width: 320px;
                 max-height: 90vh; 
                 top: 5px;
-                left: -100%;
+                left: -90%;
             }
             #routeSidebar.sidebar-open { 
                 left: 5px; 
@@ -475,8 +479,8 @@
                 shape: n.shape || 'ellipse',
                 size: n.size || (n.shape === 'box' ? 30 : 25),
                 color: { 
-                    border: '#2B7CE9', 
-                    background: n.color || '#D2E5FF' 
+                    border: '#333333', 
+                    background: '#FFFFFF' 
                 },
                 borderWidth: 2,
                 font: { color: '#000000', size: 12, face:'MyCustomFont' },
@@ -611,8 +615,8 @@
                 nodesData.update({
                     id: node.id, 
                     color: {
-                        border: '#2B7CE9', 
-                        background: originalNode?.color || '#D2E5FF'
+                        border: '#333333', 
+                        background: originalNode?.color || '#FFFFFF'
                     }, 
                     borderWidth: 2,
                     fixed: true  // Ensure nodes remain fixed
@@ -769,8 +773,8 @@
                 nodesData.update({
                     id: node.id, 
                     color: {
-                        border: '#2B7CE9', 
-                        background: originalNode?.color || '#D2E5FF'
+                        border: '#333333', 
+                        background: originalNode?.color || '#FFFFFF'
                     }, 
                     borderWidth: 2,
                     fixed: true  // Ensure nodes remain fixed
